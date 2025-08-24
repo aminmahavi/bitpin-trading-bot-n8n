@@ -1,0 +1,156 @@
+{
+  "name": "Bitpin Paper Trading BTCIRT",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            "hours"
+          ]
+        },
+        "every": 1
+      },
+      "id": "cron-node",
+      "name": "Cron Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://api.bitpin.org/v1/mkt/markets/",
+        "method": "GET"
+      },
+      "id": "http-node",
+      "name": "Get BTCIRT Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Filter BTCIRT and calculate simple RSI\nconst data = items[0].json.results.find(m => m.code === 'BTCIRT');\n// Fake close prices for demonstration\nconst closes = Array.from({length: 100}, (_, i) => 50000 + Math.sin(i) * 1000);\n\nfunction rsi(values, period) {\n  let gains = 0, losses = 0;\n  for (let i = 1; i <= period; i++) {\n    let diff = values[i] - values[i-1];\n    if (diff >= 0) gains += diff; else losses -= diff;\n  }\n  let avgGain = gains / period;\n  let avgLoss = losses / period;\n  let rs = avgGain / avgLoss;\n  return 100 - (100 / (1 + rs));\n}\n\nconst rsiValue = rsi(closes, 14);\nreturn [{ json: { market: 'BTCIRT', lastPrice: data.price, rsi: rsiValue } }];"
+      },
+      "id": "function-node",
+      "name": "Calculate RSI",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        600,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json[\"rsi\"]}}",
+              "operation": "smaller",
+              "value2": 30
+            },
+            {
+              "value1": "={{$json[\"rsi\"]}}",
+              "operation": "larger",
+              "value2": 70
+            }
+          ]
+        }
+      },
+      "id": "if-node",
+      "name": "RSI Decision",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "fields": {
+          "string": [
+            {
+              "name": "signal",
+              "value": "={{$json[\"rsi\"] < 30 ? 'Buy' : ($json[\"rsi\"] > 70 ? 'Sell' : 'Hold')}}"
+            },
+            {
+              "name": "time",
+              "value": "={{$now}}"
+            }
+          ]
+        }
+      },
+      "id": "set-node",
+      "name": "Set Paper Trade Signal",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        1200,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Cron Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get BTCIRT Market Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get BTCIRT Market Data": {
+      "main": [
+        [
+          {
+            "node": "Calculate RSI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate RSI": {
+      "main": [
+        [
+          {
+            "node": "RSI Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RSI Decision": {
+      "main": [
+        [
+          {
+            "node": "Set Paper Trade Signal",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "06a05c20-2513-4149-94cd-1e27be925891",
+  "meta": {
+    "instanceId": "122ccee9fa9b16b2f93084db4c9878ad31f4ae9694492ac18e1a8c36bfb8d8fe"
+  },
+  "id": "Z1wx4lCLtLwUAhV5",
+  "tags": []
+}
